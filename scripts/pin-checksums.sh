@@ -278,11 +278,12 @@ get_sums() {
   if [ "$sig" = inline ]; then
     # One clear-signed message and nothing around it: text outside the
     # signature would not be covered by it.
-    [ "$(sed -n '/./{p;q;}' "$tmp/sums" | tr -d '\r')" = "-----BEGIN PGP SIGNED MESSAGE-----" ] \
+    if ! { [ "$(sed -n '/./{p;q;}' "$tmp/sums" | tr -d '\r')" = "-----BEGIN PGP SIGNED MESSAGE-----" ] \
       && [ "$(grep -c '^-----BEGIN PGP SIGNED MESSAGE-----' "$tmp/sums")" -eq 1 ] \
       && [ "$(grep -c '^-----END PGP SIGNATURE-----' "$tmp/sums")" -eq 1 ] \
-      && [ "$(grep -v '^[[:space:]]*$' "$tmp/sums" | tail -n 1 | tr -d '\r')" = "-----END PGP SIGNATURE-----" ] \
-      || fail "$what: $sums_url is not a single clear-signed message"
+      && [ "$(grep -v '^[[:space:]]*$' "$tmp/sums" | tail -n 1 | tr -d '\r')" = "-----END PGP SIGNATURE-----" ]; }; then
+      fail "$what: $sums_url is not a single clear-signed message"
+    fi
     rm -f "$tmp/sums.txt"
     gpg_ --status-file "$tmp/status" --output "$tmp/sums.txt" --decrypt "$tmp/sums" >/dev/null 2>&1 || true
     check_status "$what" "$key" "$tmp/status"
@@ -399,7 +400,7 @@ for ((i = 0; i < count; i++)); do
     if [ "$sig_t" = inline ]; then sig=inline; else sig=$(fill "$sig_t" "$new" "$old" "$name" "$sums_url"); fi
     [ -z "$key_url" ] || check_url "$what: key_url" "$key_url"
   else
-    [ -z "$key" ] && [ -z "$key_url" ] || fail "$what: a key needs a signature"
+    if [ -n "$key" ] || [ -n "$key_url" ]; then fail "$what: a key needs a signature"; fi
   fi
 
   pins=$(jq -c '.pins // [] | if type == "array" and all(.[]; type == "object") then . else error("pins") end' <<<"$e" 2>/dev/null) \
@@ -444,7 +445,7 @@ for ((i = 0; i < count; i++)); do
     else
       fail "$what: pin $pvar needs either asset or url"
     fi
-    [[ "$value" =~ ^[0-9a-f]+$ ]] && [ "${#value}" -eq "$len" ] || fail "$what: pin $pvar: no $algorithm sum"
+    if ! [[ "$value" =~ ^[0-9a-f]+$ ]] || [ "${#value}" -ne "$len" ]; then fail "$what: pin $pvar: no $algorithm sum"; fi
     printf '%s\t%s\t%s\t%s\n' "$pfile" "$pvar" "$value" "$name" >>"$tmp/plan"
   done
 

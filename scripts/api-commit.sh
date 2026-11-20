@@ -70,7 +70,7 @@ while IFS= read -r -d '' entry; do
   status=${entry:0:2}
   path=${entry:3}
   [ "$status" = " M" ] || fail "only modified files can be committed, not '$status' $path"
-  [ -f "$path" ] && [ ! -L "$path" ] || fail "$path is not a regular file"
+  if [ ! -f "$path" ] || [ -L "$path" ]; then fail "$path is not a regular file"; fi
   base64 <"$path" | tr -d '\n' >"$tmp/contents"
   jq --arg path "$path" --rawfile contents "$tmp/contents" \
     '. + [{path: $path, contents: $contents}]' "$tmp/additions.json" >"$tmp/next.json"
