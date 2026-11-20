@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset of the ioanalytica repositories: one pull request per update, each with a review request, no update that waits on the Dependency Dashboard, security fixes at any time. A repository extends it with github>ioanalytica/renovate-config and keeps its own managers, groups and notes.",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigestsToSemver"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["* 0-5 * * 1"],
+  "minimumReleaseAge": "3 days",
+  "rebaseWhen": "conflicted",
+  "semanticCommits": "enabled",
+  "commitBody": "Signed-off-by: {{{gitAuthor}}}",
+  "configMigration": true,
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "reviewers": ["ioanalytica"],
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "description": "A fix for a known vulnerability comes at once: outside the weekly schedule and without the three days' wait.",
+    "schedule": ["at any time"],
+    "minimumReleaseAge": null,
+    "labels": ["security"]
+  },
+  "packageRules": [
+    {
+      "description": "A new major is a decision, not routine: its pull request comes at once like any other and carries the label decision. Closing it declines that version; the next one comes again.",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["decision"]
+    },
+    {
+      "description": "A new digest under the same version means a release tag was moved: look at the commit before merging.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest"],
+      "addLabels": ["decision"],
+      "prBodyNotes": ["The tag of this action now points to another commit. Look at that commit before merging; close the pull request to keep the old one."]
+    }
+  ]
+}

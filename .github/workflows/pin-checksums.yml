@@ -1,0 +1,184 @@
+name: Pin checksums
+
+# Called on Renovate's pull requests (see README.md for the caller). Where the
+# pull request moves a version that .github/checksums.yaml lists, it fills the
+# hash pins that go with it from the release's sums, after checking their PGP
+# signature where the table names a key, and adds the entry's CHANGELOG line.
+# It commits through the API with a token of the repository's GitHub App:
+# GitHub signs that commit, it starts the checks again, and the app, not a
+# person, is the pull request's last pusher.
+#
+# A failed check commits nothing and says why in a comment on the pull
+# request. A run whose values are already in place does nothing.
+
+on:
+  workflow_call:
+    inputs:
+      table:
+        description: The table of hash pins, relative to the repository root.
+        type: string
+        default: .github/checksums.yaml
+      bot-login:
+        description: The login of the bot whose pull requests get their sums pinned.
+        type: string
+        default: renovate[bot]
+    secrets:
+      RENOVATE_HELPER_APP_ID:
+        description: The App ID (or Client ID) of the GitHub App that commits the sums.
+        required: true
+      RENOVATE_HELPER_PRIVATE_KEY:
+        description: A private key of that GitHub App.
+        required: true
+
+permissions: {}
+
+jobs:
+  pin:
+    name: Pin checksums
+    # Only the bot's open pull requests from a branch of this repository.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.state == 'open'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login == inputs.bot-login
+      && startsWith(github.event.pull_request.head.ref, 'renovate/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Only to read this workflow's own repository and commit from the job's
+      # OIDC token; the token goes nowhere else.
+      id-token: write
+      pull-requests: write
+    concurrency:
+      group: pin-checksums-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      # A called workflow sees the caller's repository in the github context.
+      # The scripts must come from the commit the caller pinned this workflow
+      # at, which only the OIDC token's job_workflow_* claims name.
+      - name: Find this workflow's commit
+        id: self
+        run: |
+          token=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pin-checksums" | jq -r .value)
+          echo "::add-mask::$token"
+          payload=$(printf '%s' "$token" | cut -d. -f2 | tr '_-' '/+')
+          while [ $((${#payload} % 4)) -ne 0 ]; do payload="$payload="; done
+          claims=$(printf '%s' "$payload" | base64 -d)
+          ref=$(jq -r .job_workflow_ref <<<"$claims")
+          sha=$(jq -r .job_workflow_sha <<<"$claims")
+          repo=${ref%%/.github/workflows/*}
+          if ! [[ "$repo" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ && "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::cannot tell this workflow's repository and commit from '$ref'"
+            exit 1
+          fi
+          echo "Scripts from $repo at $sha"
+          {
+            echo "repository=$repo"
+            echo "sha=$sha"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Check out the scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ steps.self.outputs.repository }}
+          ref: ${{ steps.self.outputs.sha }}
+          path: tool
+          persist-credentials: false
+
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: repo
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The table is read from the merge base, not from the pull request: a
+      # pull request cannot change the keys its own sums are checked against.
+      - name: Pin the checksums
+        id: pin
+        working-directory: repo
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TABLE: ${{ inputs.table }}
+        run: |
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          "$GITHUB_WORKSPACE/tool/scripts/pin-checksums.sh" \
+            --base "$base" --table-ref "$base" --table "$TABLE" \
+            --summary "$RUNNER_TEMP/summary" --error "$RUNNER_TEMP/error"
+          if [ -s "$RUNNER_TEMP/summary" ]; then echo "changed=true" >>"$GITHUB_OUTPUT"; fi
+
+      - name: Get a token of the GitHub App
+        id: token
+        if: steps.pin.outputs.changed == 'true'
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          # The action puts this into the token's issuer claim, where GitHub
+          # takes the App ID as well as the Client ID.
+          client-id: ${{ secrets.RENOVATE_HELPER_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_HELPER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Commit through the API
+        if: steps.pin.outputs.changed == 'true'
+        working-directory: repo
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          bot="${APP_SLUG}[bot]"
+          id=$(gh api "users/$bot" --jq .id)
+          names=$(awk '{ printf "%s%s %s", (NR > 1 ? ", " : ""), $1, $3 }' "$RUNNER_TEMP/summary")
+          headline="Pin the checksums of $names"
+          if [ "${#headline}" -gt 72 ]; then
+            headline="Pin the checksums of $(grep -c . "$RUNNER_TEMP/summary") updates"
+          fi
+          {
+            echo "$headline"
+            echo
+            echo "Sums taken from the releases and checked by the pin-checksums workflow:"
+            echo "$RUN_URL"
+            echo
+            echo "Signed-off-by: $bot <$id+$bot@users.noreply.github.com>"
+          } >"$RUNNER_TEMP/message"
+          "$GITHUB_WORKSPACE/tool/scripts/api-commit.sh" --repo "$GITHUB_REPOSITORY" \
+            --branch "$BRANCH" --expected-head "$HEAD_SHA" --message-file "$RUNNER_TEMP/message"
+
+      - name: Report the failed check on the pull request
+        if: failure() && steps.pin.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "**Pin checksums** committed nothing: a check failed."
+            echo
+            if [ -s "$RUNNER_TEMP/error" ]; then
+              echo '```text'
+              tr -d '`' <"$RUNNER_TEMP/error"
+              echo '```'
+              echo
+            fi
+            echo "The hash pins stay as they are until this is sorted out. Run: $RUN_URL"
+          } >"$RUNNER_TEMP/comment"
+          "$GITHUB_WORKSPACE/tool/scripts/pr-comment.sh" --repo "$GITHUB_REPOSITORY" --pr "$PR" \
+            --body-file "$RUNNER_TEMP/comment"
+
+      - name: Mark an earlier report as resolved
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          "$GITHUB_WORKSPACE/tool/scripts/pr-comment.sh" --repo "$GITHUB_REPOSITORY" --pr "$PR" \
+            --resolve "**Pin checksums**: resolved, the checks pass. Run: $RUN_URL"

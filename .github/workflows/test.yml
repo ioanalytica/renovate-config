@@ -1,0 +1,57 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    name: Scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install bats
+        run: sudo apt-get update -q && sudo apt-get install -y -q bats
+      - name: shellcheck
+        run: shellcheck scripts/*.sh tests/fixtures/generate.sh
+      - name: Tests against the fixtures
+        run: bats tests/pin-checksums.bats tests/helpers.bats
+
+  live:
+    name: Live release files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install bats
+        run: sudo apt-get update -q && sudo apt-get install -y -q bats
+      - name: Tests against oras, etcd, rclone and hadolint releases
+        env:
+          PIN_CHECKSUMS_LIVE: "1"
+        run: bats tests/live.bats
+
+  preset:
+    name: Renovate preset
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # --no-global: a file named on the command line is otherwise checked as
+      # a self-hosted global config, which accepts options a repository's
+      # config does not.
+      - name: renovate-config-validator
+        env:
+          # renovate: datasource=npm depName=renovate
+          RENOVATE_VERSION: 44.251.0
+        run: npx --yes --package "renovate@${RENOVATE_VERSION}" -- renovate-config-validator --strict --no-global default.json .github/renovate.json
