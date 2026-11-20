@@ -6,6 +6,7 @@
   "schedule": ["* 0-5 * * 1"],
   "minimumReleaseAge": "3 days",
   "rebaseWhen": "conflicted",
+  "gitIgnoredAuthors": ["359300723+ioanalytica-renovate-helper[bot]@users.noreply.github.com"],
   "semanticCommits": "enabled",
   "commitBody": "Signed-off-by: {{{gitAuthor}}}",
   "configMigration": true,

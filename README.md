@@ -37,6 +37,7 @@ What it sets:
 | `schedule`, `timezone` | Mondays 0–5 h, Europe/Berlin | One batch a week. |
 | `minimumReleaseAge` | 3 days, none for digests | A release that is pulled again in its first days never reaches a pull request. A digest has no release date, and with the default `minimumReleaseAgeBehaviour` its status `renovate/stability-days` would stay pending for good. |
 | `rebaseWhen` | `conflicted` | No rebase and no new CI run for every commit on the base branch. |
+| `gitIgnoredAuthors` | the commit address of the GitHub App `ioanalytica-renovate-helper` | Renovate keeps rebasing and updating a branch that carries the app's commit of the sums (see [The GitHub App](#the-github-app)). A repository that sets its own `gitIgnoredAuthors` replaces this list and must repeat the address. |
 | `semanticCommits` | `enabled` | A repository without them sets `"disabled"`. |
 | `commitBody` | `Signed-off-by: {{{gitAuthor}}}` | DCO. |
 | `configMigration` | `true` | Renovate proposes the migration of a config whose options it renamed. |
@@ -276,6 +277,9 @@ repositories that use the workflow.
    ```json
    "gitIgnoredAuthors": ["<user-id>+<app-slug>[bot]@users.noreply.github.com"]
    ```
+
+   For the app `ioanalytica-renovate-helper` (user id 359300723) the preset
+   already does this.
 
    Renovate then rebases and updates the branch as before (its new commit
    replaces the app's), and the workflow fills the sums again.
