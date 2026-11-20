@@ -136,6 +136,9 @@ check_file() {
     "$root"/*) ;;
     *) fail "$what: $p resolves outside the work tree" ;;
   esac
+  # A symbolic link among the parent directories must not lead into .git or
+  # the workflows either.
+  check_path "$what" "${real#"$root"/}"
 }
 
 check_var() {
@@ -381,8 +384,8 @@ for ((i = 0; i < count; i++)); do
     [ -z "$key" ] && [ -z "$key_url" ] || fail "$what: a key needs a signature"
   fi
 
-  pins=$(jq -c '.pins // [] | if type == "array" then . else error("pins") end' <<<"$e" 2>/dev/null) \
-    || fail "$what: pins must be a list"
+  pins=$(jq -c '.pins // [] | if type == "array" and all(.[]; type == "object") then . else error("pins") end' <<<"$e" 2>/dev/null) \
+    || fail "$what: pins must be a list of objects"
   npins=$(jq length <<<"$pins")
   [ "$npins" -gt 0 ] || fail "$what: no pins"
 
@@ -430,7 +433,9 @@ for ((i = 0; i < count; i++)); do
     check_path "$what: changelog" "$cfile"
     check_file "$what: changelog" "$cfile"
     cline=$(fill "$(jq -r .line <<<"$cl")" "$new" "$old" "$name" "")
-    case "$cline" in *$'\n'*|*$'\r'*|'') fail "$what: the changelog line must be one line" ;; esac
+    if [ -z "$cline" ] || [[ "$cline" == *[[:cntrl:]]* ]]; then
+      fail "$what: the changelog line must be one line without tabs or other control characters"
+    fi
     [ "${#cline}" -le 500 ] || fail "$what: the changelog line is longer than 500 characters"
     if [ "$all" = true ]; then
       log "  changelog: --all adds no lines"

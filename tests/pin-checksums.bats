@@ -522,3 +522,21 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   run "$SCRIPT" -C "$REPO" --base base --table-ref nosuchref --error "$ERR"
   [ "$status" -eq 1 ]
 }
+
+@test "a changelog line with a tab is refused" {
+  table_error "edit_table 's|line: \"\* \*\*oras {v}\*\* for the release jobs (was {old}).\"|line: \"* oras {v}\\\\t(was {old})\"|'"
+  [[ "$(cat "$ERR")" == "oras: the changelog line must be one line without tabs or other control characters" ]]
+}
+
+@test "a pin that is not an object is refused" {
+  table_error "printf -- '- name: extra\\n  version: .github/actions/setup-oras/action.yml#ORAS_VERSION\\n  pins: [null]\\n' >>.github/checksums.yaml"
+  [[ "$(cat "$ERR")" == "extra: pins must be a list of objects" ]]
+}
+
+@test "a symbolic link among the parent directories cannot reach the workflows" {
+  mkdir -p .github/workflows && printf 'env:\n  ORAS_SHA256: %s\n' "$OLD64" >.github/workflows/build.yml
+  ln -s .github/workflows wf
+  git add -A && git commit -qm "link to workflows"
+  table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: wf/build.yml#'"
+  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]]
+}
