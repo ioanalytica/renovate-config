@@ -624,3 +624,8 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]]
   [ "$(grep -c 'oras' CHANGELOG.md)" -eq 1 ]
 }
+
+@test "an asset of signed sums without {v} is refused" {
+  table_error "edit_table 's#      asset: oras_{v}_linux_amd64.tar.gz#      asset: oras_linux_amd64.tar.gz#'"
+  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the asset of signed sums must contain {v}" ]]
+}

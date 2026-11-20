@@ -205,6 +205,25 @@ Limits:
 - **Without a signature** the sums are as trustworthy as the release page,
   as when copied by hand.
 
+### Security notes
+
+- **Who triggers it.** The workflow runs only for pull requests opened by
+  `renovate[bot]`, only on a push by `renovate[bot]` itself, and only while
+  every commit of the pull request is the bot's or an app's. A push by anyone
+  else gets no app commit on top, so nobody can make the app the last pusher
+  of their own code and then approve it. A manual re-run counts as a run by
+  whoever starts it and does nothing; to run it again after a failed download,
+  tick the rebase checkbox in the pull request, and Renovate pushes anew.
+- **One key, several repositories.** The app's private key is a secret in each
+  repository that uses the workflow. Whoever can push a workflow to one of them
+  can read it and get a token for every repository the app is installed on,
+  limited to the app's permission (contents). Keep the app's permissions and
+  its list of repositories as small as below; with collaborators, consider one
+  app per repository.
+- **Signed sums name the version.** Each asset of signed sums must contain
+  `{v}`, so validly signed sums of an older release cannot be passed off as the
+  new version's.
+
 ### Locally
 
 ```sh

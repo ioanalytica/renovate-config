@@ -425,6 +425,11 @@ for ((i = 0; i < count; i++)); do
     read_var "$what: pin" "$pfile" "$pvar" >/dev/null
     if [ -n "$asset_t" ] && [ -z "$url_t" ]; then
       [ -n "$sums_url" ] || fail "$what: pin $pvar names an asset, but the entry has no sums"
+      # Signed sums of an older release, served for the new version, would
+      # pass the signature check: the version in the asset name ties them to it.
+      if [ -n "$sig" ] && [[ "$asset_t" != *'{v}'* ]]; then
+        fail "$what: pin $pvar: the asset of signed sums must contain {v}"
+      fi
       asset=$(fill "$asset_t" "$new" "$old" "$name" "")
       [[ "$asset" =~ ^[A-Za-z0-9._+-]+$ ]] || fail "$what: pin $pvar: the asset '$asset' has characters other than letters, digits and ._+-"
       value=$(sum_of "$what" "$asset" "$len")

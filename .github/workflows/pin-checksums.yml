@@ -22,6 +22,10 @@ on:
         description: The login of the bot whose pull requests get their sums pinned.
         type: string
         default: renovate[bot]
+      bot-email:
+        description: The commit author address of that bot.
+        type: string
+        default: 29139614+renovate[bot]@users.noreply.github.com
     secrets:
       RENOVATE_HELPER_APP_ID:
         description: The App ID (or Client ID) of the GitHub App that commits the sums.
@@ -35,12 +39,16 @@ permissions: {}
 jobs:
   pin:
     name: Pin checksums
-    # Only the bot's open pull requests from a branch of this repository.
+    # Only the bot's open pull requests from a branch of this repository, and
+    # only on a push by the bot itself: a push by anyone else is not followed
+    # by a commit of the app, which would make the app the last pusher of code
+    # that person wrote.
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.state == 'open'
       && github.event.pull_request.head.repo.full_name == github.repository
       && github.event.pull_request.user.login == inputs.bot-login
+      && github.triggering_actor == inputs.bot-login
       && startsWith(github.event.pull_request.head.ref, 'renovate/')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -104,8 +112,18 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TABLE: ${{ inputs.table }}
+          BOT_EMAIL: ${{ inputs.bot-email }}
         run: |
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          # Every commit of the pull request must be the bot's or an app's
+          # (an earlier run of this workflow); with anyone else's, the app
+          # commits nothing on top.
+          others=$(git log --format='%ae' "$base..$HEAD_SHA" \
+            | grep -vxF "$BOT_EMAIL" | grep -vE '^[0-9]+\+[a-z0-9-]+\[bot\]@users\.noreply\.github\.com$' || true)
+          if [ -n "$others" ]; then
+            echo "::notice::Commits by others than the bot ($(echo "$others" | sort -u | tr '\n' ' ')): nothing pinned."
+            exit 0
+          fi
           "$GITHUB_WORKSPACE/tool/scripts/pin-checksums.sh" \
             --base "$base" --table-ref "$base" --table "$TABLE" \
             --summary "$RUNNER_TEMP/summary" --error "$RUNNER_TEMP/error"
