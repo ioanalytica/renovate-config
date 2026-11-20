@@ -96,6 +96,13 @@ yq --version 2>/dev/null | grep -q 'mikefarah' || fail "yq must be mikefarah's y
 cd "$workdir" || fail "no directory $workdir"
 root=$(pwd -P)
 
+# A revision that does not resolve is an error, not an empty table or a
+# changed version: a mistyped ref or a shallow clone would skip every check.
+for rev in "$table_ref" "$base"; do
+  [ -z "$rev" ] || git rev-parse --verify --quiet "$rev^{commit}" >/dev/null \
+    || fail "the revision $rev is not a commit in $workdir"
+done
+
 tmp=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pin-checksums.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
@@ -203,6 +210,7 @@ write_var() {
     NR == ln && match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:[[:space:]])[[:space:]]*[\"\047]?") {
       head = substr($0, 1, RLENGTH); rest = substr($0, RLENGTH + 1)
       if (match(rest, "^[^\"\047[:space:]#]+")) rest = substr(rest, RLENGTH + 1)
+      else if (rest ~ /^#/) rest = " " rest  # an empty value before a comment
       $0 = head value rest
     }
     { print }' "$file" >"$tmp/write" && cat "$tmp/write" >"$file"
@@ -478,7 +486,8 @@ done < <(sort -u "$tmp/plan")
 add_changelog_line() {
   local file=$1 text=$2 has=0
   if grep -q '^## Unreleased[[:space:]]*$' "$file"; then has=1; fi
-  awk -v text="$text" -v has="$has" '
+  PIN_TEXT=$text awk -v has="$has" '
+    BEGIN { text = ENVIRON["PIN_TEXT"] }
     # After the new item: a list item follows directly, anything else after a
     # blank line.
     function follow(l) {

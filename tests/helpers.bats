@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
 # scripts/api-commit.sh (dry run) and scripts/pr-comment.sh against a fake gh.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT=$(cd "$BATS_TEST_DIRNAME/.." && pwd -P)
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
@@ -99,14 +101,14 @@ SH
   run "$ROOT/scripts/pr-comment.sh" --repo owner/name --pr 7 --body-file "$BATS_TEST_TMPDIR/body"
   [ "$status" -eq 0 ]
   grep -q '^api --method PATCH repos/owner/name/issues/comments/42' "$FAKE_GH_DIR/calls"
-  ! grep -q 'POST' "$FAKE_GH_DIR/calls"
+  run ! grep -q 'POST' "$FAKE_GH_DIR/calls"
 }
 
 @test "pr-comment: resolve replaces an earlier comment once, and needs none" {
   fake_gh
   run "$ROOT/scripts/pr-comment.sh" --repo owner/name --pr 7 --resolve "Resolved."
   [ "$status" -eq 0 ]
-  ! grep -q 'PATCH\|POST' "$FAKE_GH_DIR/calls"
+  run ! grep -q 'PATCH\|POST' "$FAKE_GH_DIR/calls"
   echo 42 >"$FAKE_GH_DIR/ids"
   printf '<!-- pin-checksums -->\nfailed\n' >"$FAKE_GH_DIR/body"
   run "$ROOT/scripts/pr-comment.sh" --repo owner/name --pr 7 --resolve "Resolved."
@@ -116,7 +118,7 @@ SH
   : >"$FAKE_GH_DIR/calls"
   run "$ROOT/scripts/pr-comment.sh" --repo owner/name --pr 7 --resolve "Resolved."
   [ "$status" -eq 0 ]
-  ! grep -q 'PATCH' "$FAKE_GH_DIR/calls"
+  run ! grep -q 'PATCH' "$FAKE_GH_DIR/calls"
 }
 
 @test "pr-comment: an author that is not a login is refused" {

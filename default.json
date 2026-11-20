@@ -21,6 +21,11 @@
   },
   "packageRules": [
     {
+      "description": "A digest has no release date to age against: with minimumReleaseAge, its pull request would stay pending for good (minimumReleaseAgeBehaviour timestamp-required).",
+      "matchUpdateTypes": ["digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
       "description": "A new major is a decision, not routine: its pull request comes at once like any other and carries the label decision. Closing it declines that version; the next one comes again.",
       "matchUpdateTypes": ["major"],
       "addLabels": ["decision"]

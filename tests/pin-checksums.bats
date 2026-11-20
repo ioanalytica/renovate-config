@@ -494,3 +494,31 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   run "$SCRIPT" --bogus
   [ "$status" -eq 2 ]
 }
+
+@test "a changelog line keeps backslashes as they are" {
+  edit_table "s|line: \"\* \*\*etcd {v} in the agent image.\*\*\"|line: '* etcd {v}: a\\\\nb \\\\\\\\ c'|"
+  grep -qF "line: '* etcd {v}: a\\nb \\\\ c'" .github/checksums.yaml
+  git commit -qam "table" && git tag -f base >/dev/null
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  pin
+  [ "$status" -eq 0 ]
+  grep -qxF '* etcd 3.6.17: a\nb \\ c' CHANGELOG.md
+}
+
+@test "an empty value before a comment keeps the comment apart" {
+  sed -i.bak "s/^        ORAS_SHA256: $OLD64\$/        ORAS_SHA256: # filled by the workflow/" .github/actions/setup-oras/action.yml && rm .github/actions/setup-oras/action.yml.bak
+  git commit -qam "empty pin" && git tag -f base >/dev/null
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  pin
+  [ "$status" -eq 0 ]
+  expected=$(fixture_sum github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt oras_1.4.0_linux_amd64.tar.gz)
+  grep -qxF "        ORAS_SHA256: $expected # filled by the workflow" .github/actions/setup-oras/action.yml
+}
+
+@test "a revision that does not resolve is an error" {
+  run "$SCRIPT" -C "$REPO" --base nosuchref --table-ref nosuchref --error "$ERR"
+  [ "$status" -eq 1 ]
+  [[ "$(cat "$ERR")" == "the revision nosuchref is not a commit in $REPO" ]]
+  run "$SCRIPT" -C "$REPO" --base base --table-ref nosuchref --error "$ERR"
+  [ "$status" -eq 1 ]
+}

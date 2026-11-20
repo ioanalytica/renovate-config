@@ -35,7 +35,7 @@ What it sets:
 |---|---|---|
 | `extends` | `config:recommended`, `helpers:pinGitHubActionDigestsToSemver` | Actions pinned by commit, with the version as a comment. |
 | `schedule`, `timezone` | Mondays 0–5 h, Europe/Berlin | One batch a week. |
-| `minimumReleaseAge` | 3 days | A release that is pulled again in its first days never reaches a pull request. |
+| `minimumReleaseAge` | 3 days, none for digests | A release that is pulled again in its first days never reaches a pull request. A digest has no release date, and with the default `minimumReleaseAgeBehaviour` its status `renovate/stability-days` would stay pending for good. |
 | `rebaseWhen` | `conflicted` | No rebase and no new CI run for every commit on the base branch. |
 | `semanticCommits` | `enabled` | A repository without them sets `"disabled"`. |
 | `commitBody` | `Signed-off-by: {{{gitAuthor}}}` | DCO. |
@@ -183,6 +183,14 @@ On every push to a `renovate/*` branch of a pull request opened by
 
 A run whose values are already in place commits nothing, so the run started by
 its own commit ends there.
+
+The status `renovate/stability-days` does not move to the app's commit: Renovate
+sets it on its own commit, so it disappears from the pull request, as it does
+after any push by someone else. The workflow does not copy it, which would need
+a token with the `statuses` permission. Nothing is lost: Renovate creates the
+branch only once the minimum release age has passed (`internalChecksFilter`
+`strict`, the default), so the status was green, and it is not a required
+check.
 
 Limits:
 
