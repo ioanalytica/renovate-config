@@ -253,7 +253,7 @@ EOF
   git commit -qam "pinned, line edited"
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"CHANGELOG.md already changed in this pull request"* ]]
+  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]]
   [ -z "$(git status --porcelain)" ]
   [ "$(grep -c 'oras 1.4.0' CHANGELOG.md)" -eq 1 ]
 }
@@ -372,6 +372,19 @@ EOF
 @test "one failed entry stops the writes of all" {
   bump docker/Dockerfile ETCD_VERSION 3.6.17
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  # oras, the first entry, passes; etcd, the second, fails.
+  f="$MIRROR/github.com/etcd-io/etcd/releases/download/v3.6.17/SHA256SUMS"
+  grep -v 'linux-arm64' "$f" >"$f.new" && mv "$f.new" "$f"
+  pin
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"signature of https://github.com/oras-project"*"verified"* ]]
+  [[ "$(cat "$ERR")" == "etcd: no sum for etcd-v3.6.17-linux-arm64.tar.gz in the sums" ]]
+  [ -z "$(git status --porcelain)" ]
+}
+
+@test "a failed first entry stops the writes of all" {
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   d="$MIRROR/github.com/oras-project/oras/releases/download/v1.4.0"
   cp "$d/signed-by-b.asc" "$d/oras_1.4.0_checksums.txt.asc"
   pin
@@ -411,6 +424,7 @@ EOF
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   bump docker/Dockerfile ETCD_VERSION 3.6.17
   bump docker/rclone.env RCLONE_VERSION 1.76.0
+  bump docker/Dockerfile RCLONE_VERSION 1.76.0
   bump .github/actions/setup-hadolint/action.yml HADOLINT_VERSION 2.15.1
   bump docker/Dockerfile S3FS_VERSION 1.98
   run "$SCRIPT" -C "$REPO" --all --error "$ERR"
@@ -559,4 +573,24 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   [ "$status" -eq 0 ]
   [ "$(grep -c 'etcd 3.6.17' CHANGELOG.md)" -eq 2 ]
   [ "$(sed -n 5p CHANGELOG.md)" = '* **etcd 3.6.17 in the agent image.**' ]
+}
+
+@test "a pin file that pins another version is refused" {
+  bump docker/rclone.env RCLONE_VERSION 1.76.0
+  pin
+  [ "$status" -eq 1 ]
+  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.75.0, not 1.76.0 as in docker/rclone.env" ]]
+  [ -z "$(git status --porcelain)" ]
+}
+
+@test "a second update in the same pull request gets its own changelog line" {
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  pin
+  [ "$status" -eq 0 ]
+  git commit -qam "pinned oras"
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  pin
+  [ "$status" -eq 0 ]
+  grep -qxF '* **etcd 3.6.17 in the agent image.**' CHANGELOG.md
+  [ "$(grep -c 'oras 1.4.0' CHANGELOG.md)" -eq 1 ]
 }

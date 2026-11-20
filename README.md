@@ -153,7 +153,9 @@ Placeholders: `{v}` the new version, `{old}` the version on the base branch,
 
 A variable is one assignment on one line: `VAR: value` (YAML), `VAR=value` (env
 file), `ARG VAR=value` or `export VAR=value`, the value optionally quoted. Each
-variable must be assigned exactly once in its file.
+variable must be assigned exactly once in its file. A pin in another file
+that pins the version as well (the same variable) must be at the new version
+too, or its sums would not match what it installs.
 
 ### What it does
 
@@ -169,9 +171,10 @@ On every push to a `renovate/*` branch of a pull request opened by
    around it, and only the signed text is read.
 3. Only when every check of every entry passes does it write: the new sums, and
    the changelog line as the first item under `## Unreleased` (a new section
-   above the first `## ` heading when there is none). A changelog the pull
-   request has already changed gets no line, so a line edited in review is not
-   added again.
+   above the first `## ` heading when there is none). An entry gets no line
+   when the pull request has already added one that names the tool and its new
+   version, so a line edited in review is not added again, while a second
+   update in the same pull request still gets its own.
 4. It commits the changed files to the branch through the GraphQL API
    (`createCommitOnBranch`) with a token of the GitHub App, on top of the head it
    checked out; if the branch has moved, GitHub refuses the commit and the run

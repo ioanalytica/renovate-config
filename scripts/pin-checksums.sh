@@ -409,6 +409,12 @@ for ((i = 0; i < count; i++)); do
     check_var "$what: pin" "$pvar"
     check_file "$what: pin $pvar" "$pfile"
     read_var "$what: pin" "$pfile" "$pvar" >/dev/null
+    # A pin in another file that pins the version as well must be at the new
+    # version, or its sums would not match the version it installs.
+    if [ "$pfile" != "$vfile" ] && grep -qE "^[[:space:]]*((ARG|export)[[:space:]]+)?${vvar}[[:space:]]*(=|:([[:space:]]|\$))" "$pfile"; then
+      pv=$(read_var "$what: pin" "$pfile" "$vvar" | cut -d' ' -f2)
+      [ "$pv" = "$new" ] || fail "$what: $vvar in $pfile is ${pv:-empty}, not $new as in $vfile"
+    fi
     if [ -n "$asset_t" ] && [ -z "$url_t" ]; then
       [ -n "$sums_url" ] || fail "$what: pin $pvar names an asset, but the entry has no sums"
       asset=$(fill "$asset_t" "$new" "$old" "$name" "")
@@ -444,7 +450,7 @@ for ((i = 0; i < count; i++)); do
     if [ "$all" = true ]; then
       log "  changelog: --all adds no lines"
     else
-      printf '%s\t%s\t%s\n' "$cfile" "$cline" "$name" >>"$tmp/changelog-plan"
+      printf '%s\t%s\t%s\t%s\n' "$cfile" "$cline" "$name" "$new" >>"$tmp/changelog-plan"
     fi
   fi
   printf '%s %s %s\n' "$name" "${old:--}" "$new" >>"$tmp/entries"
@@ -468,13 +474,13 @@ fi
 
 : >"$tmp/changed-entries"
 
-# Changelogs changed in the pull request already have their line, written by an
-# earlier run or by hand; decided before anything is written.
-: >"$tmp/changelog-skip"
+# The lines a pull request has already added to each changelog, by an earlier
+# run or by hand, taken before anything is written.
+added_lines() { printf '%s/added-%s' "$tmp" "$(printf '%s' "$1" | tr '/' '_')"; }
 if [ -n "$base" ]; then
   cut -f1 "$tmp/changelog-plan" | sort -u | while IFS= read -r f; do
     [ -n "$f" ] || continue
-    git diff --quiet "$base" -- "$f" 2>/dev/null || printf '%s\n' "$f" >>"$tmp/changelog-skip"
+    git diff --no-ext-diff --no-color -U0 "$base" -- "$f" | sed -n 's/^+//p' | grep -v '^++ ' >"$(added_lines "$f")" || true
   done
 fi
 
@@ -515,10 +521,15 @@ add_changelog_line() {
     END { if (!done) { print ""; print "## Unreleased"; print ""; print text } }' "$file" >"$tmp/changelog" && cat "$tmp/changelog" >"$file"
 }
 
-while IFS=$'\t' read -r cfile cline entry; do
+while IFS=$'\t' read -r cfile cline entry version; do
   [ -n "$cfile" ] || continue
-  if grep -qxF "$cfile" "$tmp/changelog-skip"; then
-    log "$cfile already changed in this pull request: no line for $entry"
+  # A line the pull request added that names the tool and its new version is
+  # this entry's line, perhaps edited in review: it is not added again.
+  added=$(added_lines "$cfile")
+  if [ -s "$added" ] && PIN_NAME=$entry PIN_VERSION=$version awk '
+       index(tolower($0), tolower(ENVIRON["PIN_NAME"])) && index($0, ENVIRON["PIN_VERSION"]) { f = 1 }
+       END { exit !f }' "$added"; then
+    log "$cfile already mentions $entry $version in this pull request"
     continue
   fi
   # Only the Unreleased section counts: the same line under a released
