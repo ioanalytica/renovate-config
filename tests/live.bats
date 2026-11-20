@@ -65,7 +65,7 @@ value_of() { grep -E "^[[:space:]]*(ARG )?$2(: |=)" "$1" | sed -E 's/.*(: |=)//'
   run "$SCRIPT" --base base --table-ref base
   echo "$output"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"verified, made by C6FC42F0DE84A345FAADB742F44418110791EF37"* ]]
+  [[ "$output" == *"verified, made by C6FC42F0DE84A345FAADB742F44418110791EF37"* ]] || false
   [ "$(value_of .github/actions/setup-oras/action.yml ORAS_SHA256)" = d8e1dce2fd8ce996f1d901845b688eb0cf505a6082897606f053825bb47935d1 ]
 }
 
@@ -83,7 +83,7 @@ value_of() { grep -E "^[[:space:]]*(ARG )?$2(: |=)" "$1" | sed -E 's/.*(: |=)//'
   run "$SCRIPT" --base base --table-ref base
   echo "$output"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"verified, made by FBF737ECE9F8AB18604BD2AC93935E02FF3B54FA"* ]]
+  [[ "$output" == *"verified, made by FBF737ECE9F8AB18604BD2AC93935E02FF3B54FA"* ]] || false
   [ "$(value_of docker/rclone.env RCLONE_SHA256_AMD64)" = b00f00b3266c3764413afe599d3ec316f6f43b3e0ea8a0bc1d186d2133e46df7 ]
   [ "$(value_of docker/rclone.env RCLONE_SHA256_ARM64)" = ee169016675e23a69d77240565133ff7dbc9b33d16fa8f7053d4af39f1eaeb78 ]
 }

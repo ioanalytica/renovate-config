@@ -37,7 +37,7 @@ commit() {
   [ "$(jq -r .message.body <<<"$input")" = "$(printf 'Verified.\n\nSigned-off-by: app[bot] <1+app[bot]@users.noreply.github.com>')" ]
   [ "$(jq -r '.fileChanges.additions | map(.path) | join(" ")' <<<"$input")" = "CHANGELOG.md docker/Dockerfile" ]
   [ "$(jq -r '.fileChanges.additions[1].contents' <<<"$input" | base64 -d)" = "ARG A_SHA256=1" ]
-  [[ "$(jq -r .query <<<"$output")" == *createCommitOnBranch* ]]
+  [[ "$(jq -r .query <<<"$output")" == *createCommitOnBranch* ]] || false
 }
 
 @test "api-commit: nothing modified, nothing to commit" {
@@ -50,7 +50,7 @@ commit() {
   printf 'x\n' >new.txt
   commit
   [ "$status" -eq 1 ]
-  [[ "$output" == *"only modified files can be committed, not '??' new.txt"* ]]
+  [[ "$output" == *"only modified files can be committed, not '??' new.txt"* ]] || false
 }
 
 @test "api-commit: a work tree at another commit stops it" {
@@ -58,7 +58,7 @@ commit() {
   printf 'ARG A_SHA256=1\n' >docker/Dockerfile
   commit
   [ "$status" -eq 1 ]
-  [[ "$output" == *"the work tree is not at $HEAD_SHA"* ]]
+  [[ "$output" == *"the work tree is not at $HEAD_SHA"* ]] || false
 }
 
 # A fake gh: logs each call, answers from $FAKE_GH_DIR.

@@ -160,7 +160,7 @@ value_of() { grep -E "^[[:space:]]*(ARG )?$2(: |=)" "$1" | sed -E 's/.*(: |=)"?(
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"signature of https://github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt verified, made by $KEY_A"* ]]
+  [[ "$output" == *"signature of https://github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt verified, made by $KEY_A"* ]] || false
   expected=$(fixture_sum github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt oras_1.4.0_linux_amd64.tar.gz)
   [ "$(value_of .github/actions/setup-oras/action.yml ORAS_SHA256)" = "$expected" ]
   [ "$(cat "$SUM")" = "oras 1.3.6 1.4.0" ]
@@ -228,7 +228,7 @@ EOF
   rm -rf "$MIRROR"
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No version changed: nothing to do."* ]]
+  [[ "$output" == *"No version changed: nothing to do."* ]] || false
   [ -z "$(git status --porcelain)" ]
   [ ! -s "$SUM" ]
 }
@@ -240,7 +240,7 @@ EOF
   git commit -qam "pinned"
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"All values already in place: nothing written."* ]]
+  [[ "$output" == *"All values already in place: nothing written."* ]] || false
   [ -z "$(git status --porcelain)" ]
   [ ! -s "$SUM" ]
 }
@@ -253,7 +253,7 @@ EOF
   git commit -qam "pinned, line edited"
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]]
+  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]] || false
   [ -z "$(git status --porcelain)" ]
   [ "$(grep -c 'oras 1.4.0' CHANGELOG.md)" -eq 1 ]
 }
@@ -311,7 +311,7 @@ EOF
   sed -i.bak "s/^[0-9a-f]\{64\}  oras_1.4.0_linux_amd64/${OLD64/0/1}  oras_1.4.0_linux_amd64/" "$f" && rm "$f.bak"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "oras: the signature does not verify against $KEY_A" ]]
+  [[ "$(cat "$ERR")" == "oras: the signature does not verify against $KEY_A" ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -321,7 +321,7 @@ EOF
   cp "$d/signed-by-b.asc" "$d/oras_1.4.0_checksums.txt.asc"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "oras: the signature is not made by $KEY_A" ]]
+  [[ "$(cat "$ERR")" == "oras: the signature is not made by $KEY_A" ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -331,16 +331,17 @@ EOF
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "oras: the key ${KEY_A:0:39}0 is not in https://raw.githubusercontent.com/oras-project/oras/main/KEYS" ]]
+  [[ "$(cat "$ERR")" == "oras: the key ${KEY_A:0:39}0 is not in https://raw.githubusercontent.com/oras-project/oras/main/KEYS" ]] || false
 }
 
 @test "text outside a clear-signed message is refused" {
   bump docker/rclone.env RCLONE_VERSION 1.76.0
+  bump docker/Dockerfile RCLONE_VERSION 1.76.0
   f="$MIRROR/downloads.rclone.org/v1.76.0/SHA256SUMS"
   { printf '%s  rclone-v1.76.0-linux-amd64.zip\n\n' "${OLD64/0/2}"; cat "$f"; } >"$f.new" && mv "$f.new" "$f"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: https://downloads.rclone.org/v1.76.0/SHA256SUMS is not a single clear-signed message" ]]
+  [[ "$(cat "$ERR")" == "rclone: https://downloads.rclone.org/v1.76.0/SHA256SUMS is not a single clear-signed message" ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -351,7 +352,7 @@ EOF
   sed -i.bak "s/^[0-9a-f]\{64\}  rclone-v1.76.0-linux-arm64/${OLD64/0/3}  rclone-v1.76.0-linux-arm64/" "$f" && rm "$f.bak"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: the signature does not verify against $KEY_B" ]]
+  [[ "$(cat "$ERR")" == "rclone: the signature does not verify against $KEY_B" ]] || false
 }
 
 @test "an asset missing from the sums fails" {
@@ -360,14 +361,14 @@ EOF
   grep -v 'linux-x86_64' "$f" >"$f.new" && mv "$f.new" "$f"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "hadolint: no sum for hadolint-linux-x86_64 in the sums" ]]
+  [[ "$(cat "$ERR")" == "hadolint: no sum for hadolint-linux-x86_64 in the sums" ]] || false
 }
 
 @test "sums that cannot be downloaded fail" {
   bump docker/Dockerfile ETCD_VERSION 3.6.18
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "etcd: cannot download the sums from https://github.com/etcd-io/etcd/releases/download/v3.6.18/SHA256SUMS" ]]
+  [[ "$(cat "$ERR")" == "etcd: cannot download the sums from https://github.com/etcd-io/etcd/releases/download/v3.6.18/SHA256SUMS" ]] || false
 }
 
 @test "one failed entry stops the writes of all" {
@@ -378,8 +379,8 @@ EOF
   grep -v 'linux-arm64' "$f" >"$f.new" && mv "$f.new" "$f"
   pin
   [ "$status" -eq 1 ]
-  [[ "$output" == *"signature of https://github.com/oras-project"*"verified"* ]]
-  [[ "$(cat "$ERR")" == "etcd: no sum for etcd-v3.6.17-linux-arm64.tar.gz in the sums" ]]
+  [[ "$output" == *"signature of https://github.com/oras-project"*"verified"* ]] || false
+  [[ "$(cat "$ERR")" == "etcd: no sum for etcd-v3.6.17-linux-arm64.tar.gz in the sums" ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -400,28 +401,28 @@ EOF
   cp "$d/signed-by-b.asc" "$d/oras_1.4.0_checksums.txt.asc"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "oras: the signature is not made by $KEY_A" ]]
+  [[ "$(cat "$ERR")" == "oras: the signature is not made by $KEY_A" ]] || false
 }
 
 @test "a repository without a table has nothing to do" {
   git rm -q .github/checksums.yaml && git commit -qm "no table" && git tag -f base >/dev/null
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No .github/checksums.yaml at base: nothing to do."* ]]
+  [[ "$output" == *"No .github/checksums.yaml at base: nothing to do."* ]] || false
 }
 
 @test "--dry-run checks everything and writes nothing" {
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   pin --dry-run
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Dry run: all checks passed, nothing written."* ]]
+  [[ "$output" == *"Dry run: all checks passed, nothing written."* ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
 @test "--all processes unchanged entries and adds no changelog line" {
   run "$SCRIPT" -C "$REPO" --all --error "$ERR"
   [ "$status" -eq 1 ]  # the base versions have no fixtures
-  [[ "$(cat "$ERR")" == "oras: cannot download the sums from https://github.com/oras-project/oras/releases/download/v1.3.6/oras_1.3.6_checksums.txt" ]]
+  [[ "$(cat "$ERR")" == "oras: cannot download the sums from https://github.com/oras-project/oras/releases/download/v1.3.6/oras_1.3.6_checksums.txt" ]] || false
   bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
   bump docker/Dockerfile ETCD_VERSION 3.6.17
   bump docker/rclone.env RCLONE_VERSION 1.76.0
@@ -450,34 +451,34 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
 
 @test "a path with .. is refused" {
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: .github/../outside.yml#'"
-  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/../outside.yml' must be plain and relative, without ., .. or //" ]]
+  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/../outside.yml' must be plain and relative, without ., .. or //" ]] || false
 }
 
 @test "a workflow file is refused" {
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: .github/workflows/test.yml#'"
-  [[ "$(cat "$ERR")" == *"is a workflow file, which the app cannot change"* ]]
+  [[ "$(cat "$ERR")" == *"is a workflow file, which the app cannot change"* ]] || false
 }
 
 @test "an http URL is refused" {
   table_error "edit_table 's#sums: https://github.com/oras-project#sums: http://github.com/oras-project#'"
-  [[ "$(cat "$ERR")" == "oras: sums: 'http://github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt' is not an https URL of plain characters" ]]
+  [[ "$(cat "$ERR")" == "oras: sums: 'http://github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt' is not an https URL of plain characters" ]] || false
 }
 
 @test "an unknown key in an entry is refused" {
   table_error "printf -- '- name: extra\n  version: docker/Dockerfile#ETCD_VERSION\n  signatur: inline\n  pins: []\n' >>.github/checksums.yaml"
-  [[ "$(cat "$ERR")" == "extra: unknown keys: signatur" ]]
+  [[ "$(cat "$ERR")" == "extra: unknown keys: signatur" ]] || false
 }
 
 @test "a short key id is refused" {
   table_error "edit_table 's/key: ${KEY_A}/key: ${KEY_A:24:16}/'"
-  [[ "$(cat "$ERR")" == "oras: the key '${KEY_A:24:16}' is not a full fingerprint (40 or 64 hex digits)" ]]
+  [[ "$(cat "$ERR")" == "oras: the key '${KEY_A:24:16}' is not a full fingerprint (40 or 64 hex digits)" ]] || false
 }
 
 @test "a version with other characters is refused" {
   bump .github/actions/setup-oras/action.yml ORAS_VERSION '1.4.0\/..\/x'
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "oras: the version '1.4.0/../x' has characters other than letters, digits and ._+-" ]]
+  [[ "$(cat "$ERR")" == "oras: the version '1.4.0/../x' has characters other than letters, digits and ._+-" ]] || false
 }
 
 @test "a variable assigned twice is refused" {
@@ -486,7 +487,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   bump docker/Dockerfile ETCD_VERSION 3.6.17
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "etcd: pin: ETCD_SHA256_AMD64 is assigned 2 times in docker/Dockerfile, not once" ]]
+  [[ "$(cat "$ERR")" == "etcd: pin: ETCD_SHA256_AMD64 is assigned 2 times in docker/Dockerfile, not once" ]] || false
 }
 
 @test "a pin file that is a symbolic link out of the work tree is refused" {
@@ -499,7 +500,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   bump docker/Dockerfile RCLONE_VERSION 1.76.0
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: pin: docker/link.env is a symbolic link" ]]
+  [[ "$(cat "$ERR")" == "rclone: pin: docker/link.env is a symbolic link" ]] || false
 }
 
 @test "usage errors exit 2" {
@@ -534,19 +535,19 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
 @test "a revision that does not resolve is an error" {
   run "$SCRIPT" -C "$REPO" --base nosuchref --table-ref nosuchref --error "$ERR"
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "the revision nosuchref is not a commit in $REPO" ]]
+  [[ "$(cat "$ERR")" == "the revision nosuchref is not a commit in $REPO" ]] || false
   run "$SCRIPT" -C "$REPO" --base base --table-ref nosuchref --error "$ERR"
   [ "$status" -eq 1 ]
 }
 
 @test "a changelog line with a tab is refused" {
   table_error "edit_table 's|line: \"\* \*\*oras {v}\*\* for the release jobs (was {old}).\"|line: \"* oras {v}\\\\t(was {old})\"|'"
-  [[ "$(cat "$ERR")" == "oras: the changelog line must be one line without tabs or other control characters" ]]
+  [[ "$(cat "$ERR")" == "oras: the changelog line must be one line without tabs or other control characters" ]] || false
 }
 
 @test "a pin that is not an object is refused" {
   table_error "printf -- '- name: extra\\n  version: .github/actions/setup-oras/action.yml#ORAS_VERSION\\n  pins: [null]\\n' >>.github/checksums.yaml"
-  [[ "$(cat "$ERR")" == "extra: pins must be a list of objects" ]]
+  [[ "$(cat "$ERR")" == "extra: pins must be a list of objects" ]] || false
 }
 
 @test "a symbolic link among the parent directories cannot reach the workflows" {
@@ -554,7 +555,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   ln -s .github/workflows wf
   git add -A && git commit -qm "link to workflows"
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: wf/build.yml#'"
-  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]]
+  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]] || false
 }
 
 @test "an empty YAML value with nothing after the colon is filled" {
@@ -581,7 +582,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   bump docker/rclone.env RCLONE_VERSION 1.76.0
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.75.0, not 1.76.0 as in docker/rclone.env" ]]
+  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.75.0, not 1.76.0 as in docker/rclone.env" ]] || false
   [ -z "$(git status --porcelain)" ]
 }
 
@@ -602,7 +603,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   git commit -qam "rclone in the Dockerfile only"
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.76.0, not 1.75.0 as in docker/rclone.env" ]]
+  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.76.0, not 1.75.0 as in docker/rclone.env" ]] || false
 }
 
 @test "a prerelease line does not count as the release's line" {
@@ -621,11 +622,11 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   git commit -qam "own line"
   pin
   [ "$status" -eq 0 ]
-  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]]
+  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]] || false
   [ "$(grep -c 'oras' CHANGELOG.md)" -eq 1 ]
 }
 
 @test "an asset of signed sums without {v} is refused" {
   table_error "edit_table 's#      asset: oras_{v}_linux_amd64.tar.gz#      asset: oras_linux_amd64.tar.gz#'"
-  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the asset of signed sums must contain {v}" ]]
+  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the asset of signed sums must contain {v}" ]] || false
 }
