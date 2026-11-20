@@ -540,3 +540,23 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: wf/build.yml#'"
   [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]]
 }
+
+@test "an empty YAML value with nothing after the colon is filled" {
+  sed -i.bak "s/^        ORAS_SHA256: $OLD64\$/        ORAS_SHA256:/" .github/actions/setup-oras/action.yml && rm .github/actions/setup-oras/action.yml.bak
+  git commit -qam "empty pin" && git tag -f base >/dev/null
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  pin
+  [ "$status" -eq 0 ]
+  expected=$(fixture_sum github.com/oras-project/oras/releases/download/v1.4.0/oras_1.4.0_checksums.txt oras_1.4.0_linux_amd64.tar.gz)
+  grep -qxF "        ORAS_SHA256: $expected" .github/actions/setup-oras/action.yml
+}
+
+@test "the same line under a released version does not stop the Unreleased one" {
+  printf '# Changelog\n\n## Unreleased\n\n## 1.0.0\n\n* **etcd 3.6.17 in the agent image.**\n' >CHANGELOG.md
+  git commit -qam "released" && git tag -f base >/dev/null
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  pin
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'etcd 3.6.17' CHANGELOG.md)" -eq 2 ]
+  [ "$(sed -n 5p CHANGELOG.md)" = '* **etcd 3.6.17 in the agent image.**' ]
+}

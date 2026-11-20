@@ -182,7 +182,7 @@ read_var() {
   local what=$1 file=$2 var=$3 out n
   out=$(awk -v var="$var" '
     {
-      if (match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:[[:space:]])[[:space:]]*[\"\047]?")) {
+      if (match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:([[:space:]]|$))[[:space:]]*[\"\047]?")) {
         rest = substr($0, RSTART + RLENGTH)
         if (match(rest, "^[^\"\047[:space:]#]+")) print NR " " substr(rest, 1, RLENGTH)
         else print NR " "
@@ -199,7 +199,7 @@ read_var_at() {
   local rev=$1 file=$2 var=$3
   git show "$rev:$file" 2>/dev/null | awk -v var="$var" '
     {
-      if (match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:[[:space:]])[[:space:]]*[\"\047]?")) {
+      if (match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:([[:space:]]|$))[[:space:]]*[\"\047]?")) {
         rest = substr($0, RSTART + RLENGTH)
         if (match(rest, "^[^\"\047[:space:]#]+")) { print substr(rest, 1, RLENGTH); exit }
       }
@@ -210,8 +210,9 @@ read_var_at() {
 write_var() {
   local file=$1 var=$2 line=$3 value=$4
   awk -v var="$var" -v ln="$line" -v value="$value" '
-    NR == ln && match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:[[:space:]])[[:space:]]*[\"\047]?") {
+    NR == ln && match($0, "^[[:space:]]*((ARG|export)[[:space:]]+)?" var "[[:space:]]*(=|:([[:space:]]|$))[[:space:]]*[\"\047]?") {
       head = substr($0, 1, RLENGTH); rest = substr($0, RLENGTH + 1)
+      if (head ~ /:$/) head = head " "  # "VAR:" with nothing after it
       if (match(rest, "^[^\"\047[:space:]#]+")) rest = substr(rest, RLENGTH + 1)
       else if (rest ~ /^#/) rest = " " rest  # an empty value before a comment
       $0 = head value rest
@@ -246,7 +247,10 @@ import_key() {
   check_url "$what: key" "$url"
   fetch "$url" "$tmp/key" 1048576 || fail "$what: cannot download the key from $url"
   gpg_ --import "$tmp/key" >/dev/null 2>&1 || fail "$what: $url holds no OpenPGP key"
-  gpg_ --with-colons --fingerprint --fingerprint 2>/dev/null | awk -F: '$1 == "fpr" {print $10}' | grep -qx "$key" \
+  # awk reads to the end: grep -q would stop early, and under pipefail the
+  # SIGPIPE of a long key list would count as a failure.
+  gpg_ --with-colons --fingerprint --fingerprint 2>/dev/null \
+    | awk -F: -v k="$key" '$1 == "fpr" && $10 == k { f = 1 } END { exit !f }' \
     || fail "$what: the key $key is not in $url"
 }
 
@@ -258,7 +262,7 @@ check_status() {
      || ! grep -q '^\[GNUPG:\] GOODSIG ' "$status"; then
     fail "$what: the signature does not verify against $key"
   fi
-  awk '$2 == "VALIDSIG" { print $3; if ($12 != "") print $12 }' "$status" | grep -qx "$key" \
+  awk -v k="$key" '$2 == "VALIDSIG" && ($3 == k || $12 == k) { f = 1 } END { exit !f }' "$status" \
     || fail "$what: the signature is not made by $key"
 }
 
@@ -517,7 +521,9 @@ while IFS=$'\t' read -r cfile cline entry; do
     log "$cfile already changed in this pull request: no line for $entry"
     continue
   fi
-  if grep -qxF -- "$cline" "$cfile"; then
+  # Only the Unreleased section counts: the same line under a released
+  # version (an update back to an earlier version) is history.
+  if PIN_TEXT=$cline awk '/^## / { u = ($0 ~ /^## Unreleased[[:space:]]*$/) } u && $0 == ENVIRON["PIN_TEXT"] { f = 1 } END { exit !f }' "$cfile"; then
     log "$cfile already has the line for $entry"
     continue
   fi

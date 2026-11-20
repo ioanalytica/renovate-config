@@ -55,7 +55,9 @@ headline=$(head -n 1 "$message_file")
 body=$(tail -n +3 "$message_file")
 [ -n "$headline" ] || fail "the message has no headline"
 
+# git status prints paths relative to the top of the work tree.
 cd "$workdir"
+cd "$(git rev-parse --show-toplevel)"
 [ "$(git rev-parse HEAD)" = "$head" ] || fail "the work tree is not at $head"
 
 tmp=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/api-commit.XXXXXX")

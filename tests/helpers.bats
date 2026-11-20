@@ -132,3 +132,12 @@ SH
   jq -e 'all(.[]; (keys - ["name","version","sums","signature","key","key_url","algorithm","pins","changelog"]) == []
          and all(.pins[]; (keys - ["file","var","asset","url"]) == []))' <<<"$output"
 }
+
+@test "api-commit: from a subdirectory, paths are those of the work tree's top" {
+  printf 'ARG A_SHA256=1\n' >docker/Dockerfile
+  run "$ROOT/scripts/api-commit.sh" -C docker --repo owner/name --branch renovate/etcd --expected-head "$HEAD_SHA" \
+    --message-file "$BATS_TEST_TMPDIR/message" --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.variables.input.fileChanges.additions[0].path' <<<"$output")" = docker/Dockerfile ]
+  [ "$(jq -r '.variables.input.fileChanges.additions[0].contents' <<<"$output" | base64 -d)" = "ARG A_SHA256=1" ]
+}
