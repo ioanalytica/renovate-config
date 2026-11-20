@@ -352,6 +352,20 @@ for ((i = 0; i < count; i++)); do
   new=$(read_var "$what: version" "$vfile" "$vvar" | cut -d' ' -f2)
   check_version "$what" "$new"
 
+  # A pin file that pins the version as well must be at the same version, or
+  # its sums would not match what it installs; checked even when the entry's
+  # own version file did not move.
+  peers=$(jq -r '.pins // [] | if type == "array" then .[] | objects | .file // empty | strings else empty end' <<<"$e" | sort -u)
+  for pf in $peers; do
+    [ "$pf" != "$vfile" ] || continue
+    check_path "$what: pin" "$pf"
+    check_file "$what: pin" "$pf"
+    if grep -qE "^[[:space:]]*((ARG|export)[[:space:]]+)?${vvar}[[:space:]]*(=|:([[:space:]]|\$))" "$pf"; then
+      pv=$(read_var "$what: pin" "$pf" "$vvar" | cut -d' ' -f2)
+      [ "$pv" = "$new" ] || fail "$what: $vvar in $pf is ${pv:-empty}, not $new as in $vfile"
+    fi
+  done
+
   old=
   if [ -n "$base" ]; then
     old=$(read_var_at "$base" "$vfile" "$vvar")
@@ -409,12 +423,6 @@ for ((i = 0; i < count; i++)); do
     check_var "$what: pin" "$pvar"
     check_file "$what: pin $pvar" "$pfile"
     read_var "$what: pin" "$pfile" "$pvar" >/dev/null
-    # A pin in another file that pins the version as well must be at the new
-    # version, or its sums would not match the version it installs.
-    if [ "$pfile" != "$vfile" ] && grep -qE "^[[:space:]]*((ARG|export)[[:space:]]+)?${vvar}[[:space:]]*(=|:([[:space:]]|\$))" "$pfile"; then
-      pv=$(read_var "$what: pin" "$pfile" "$vvar" | cut -d' ' -f2)
-      [ "$pv" = "$new" ] || fail "$what: $vvar in $pfile is ${pv:-empty}, not $new as in $vfile"
-    fi
     if [ -n "$asset_t" ] && [ -z "$url_t" ]; then
       [ -n "$sums_url" ] || fail "$what: pin $pvar names an asset, but the entry has no sums"
       asset=$(fill "$asset_t" "$new" "$old" "$name" "")
@@ -526,8 +534,22 @@ while IFS=$'\t' read -r cfile cline entry version; do
   # A line the pull request added that names the tool and its new version is
   # this entry's line, perhaps edited in review: it is not added again.
   added=$(added_lines "$cfile")
+  # The version counts only as a whole word: 1.4.0 is not in 1.4.0-rc.1, but
+  # it is in "1.4.0." at the end of a sentence.
   if [ -s "$added" ] && PIN_NAME=$entry PIN_VERSION=$version awk '
-       index(tolower($0), tolower(ENVIRON["PIN_NAME"])) && index($0, ENVIRON["PIN_VERSION"]) { f = 1 }
+       function has_version(l, v,    i, p, before, after, next2) {
+         p = 0
+         while ((i = index(substr(l, p + 1), v)) > 0) {
+           p += i
+           before = (p > 1) ? substr(l, p - 1, 1) : ""
+           after = substr(l, p + length(v), 1)
+           next2 = substr(l, p + length(v) + 1, 1)
+           if (before !~ /[0-9A-Za-z._+-]/ && (after !~ /[0-9A-Za-z._+-]/ || (after == "." && next2 !~ /[0-9A-Za-z]/)))
+             return 1
+         }
+         return 0
+       }
+       index(tolower($0), tolower(ENVIRON["PIN_NAME"])) && has_version($0, ENVIRON["PIN_VERSION"]) { f = 1 }
        END { exit !f }' "$added"; then
     log "$cfile already mentions $entry $version in this pull request"
     continue

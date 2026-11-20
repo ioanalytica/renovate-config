@@ -346,6 +346,7 @@ EOF
 
 @test "a changed line inside a clear-signed message fails its signature" {
   bump docker/rclone.env RCLONE_VERSION 1.76.0
+  bump docker/Dockerfile RCLONE_VERSION 1.76.0
   f="$MIRROR/downloads.rclone.org/v1.76.0/SHA256SUMS"
   sed -i.bak "s/^[0-9a-f]\{64\}  rclone-v1.76.0-linux-arm64/${OLD64/0/3}  rclone-v1.76.0-linux-arm64/" "$f" && rm "$f.bak"
   pin
@@ -449,7 +450,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
 
 @test "a path with .. is refused" {
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: .github/../outside.yml#'"
-  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the path '.github/../outside.yml' must be plain and relative, without ., .. or //" ]]
+  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/../outside.yml' must be plain and relative, without ., .. or //" ]]
 }
 
 @test "a workflow file is refused" {
@@ -495,9 +496,10 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   sed -i.bak 's#{ file: docker/rclone.env#{ file: docker/link.env#' .github/checksums.yaml && rm .github/checksums.yaml.bak
   git commit -qam "table" && git tag -f base >/dev/null
   bump docker/rclone.env RCLONE_VERSION 1.76.0
+  bump docker/Dockerfile RCLONE_VERSION 1.76.0
   pin
   [ "$status" -eq 1 ]
-  [[ "$(cat "$ERR")" == "rclone: pin RCLONE_SHA256_AMD64: docker/link.env is a symbolic link" ]]
+  [[ "$(cat "$ERR")" == "rclone: pin: docker/link.env is a symbolic link" ]]
 }
 
 @test "usage errors exit 2" {
@@ -552,7 +554,7 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   ln -s .github/workflows wf
   git add -A && git commit -qm "link to workflows"
   table_error "edit_table 's#- file: .github/actions/setup-oras/action.yml#- file: wf/build.yml#'"
-  [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]]
+  [[ "$(cat "$ERR")" == "oras: pin: the path '.github/workflows/build.yml' is a workflow file, which the app cannot change; move the pin into a local action (.github/actions/)" ]]
 }
 
 @test "an empty YAML value with nothing after the colon is filled" {
@@ -593,4 +595,32 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
   [ "$status" -eq 0 ]
   grep -qxF '* **etcd 3.6.17 in the agent image.**' CHANGELOG.md
   [ "$(grep -c 'oras 1.4.0' CHANGELOG.md)" -eq 1 ]
+}
+
+@test "a pin file at another version is refused when only it moved" {
+  sed -i.bak 's/^ARG RCLONE_VERSION=.*/ARG RCLONE_VERSION=1.76.0/' docker/Dockerfile && rm docker/Dockerfile.bak
+  git commit -qam "rclone in the Dockerfile only"
+  pin
+  [ "$status" -eq 1 ]
+  [[ "$(cat "$ERR")" == "rclone: RCLONE_VERSION in docker/Dockerfile is 1.76.0, not 1.75.0 as in docker/rclone.env" ]]
+}
+
+@test "a prerelease line does not count as the release's line" {
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0-rc.1
+  printf '# Changelog\n\n## Unreleased\n\n* oras 1.4.0-rc.1 for testing.\n' >CHANGELOG.md
+  git commit -qam "rc line"
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  pin
+  [ "$status" -eq 0 ]
+  grep -qxF '* **oras 1.4.0** for the release jobs (was 1.3.6).' CHANGELOG.md
+}
+
+@test "a line ending with the version and a full stop counts" {
+  bump .github/actions/setup-oras/action.yml ORAS_VERSION 1.4.0
+  printf '# Changelog\n\n## Unreleased\n\n* Moved oras to 1.4.0.\n' >CHANGELOG.md
+  git commit -qam "own line"
+  pin
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CHANGELOG.md already mentions oras 1.4.0 in this pull request"* ]]
+  [ "$(grep -c 'oras' CHANGELOG.md)" -eq 1 ]
 }
