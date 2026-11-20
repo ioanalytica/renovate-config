@@ -295,3 +295,7 @@ The fixtures are made up and signed with throwaway keys;
 etcd 3.6.17, rclone 1.76.0 and hadolint 2.15.1 against the sums pinned by hand
 in the repositories that use them. CI (`.github/workflows/test.yml`) runs both,
 shellcheck, and the Renovate config validator on the preset.
+
+## License
+
+[Apache License 2.0](LICENSE).
