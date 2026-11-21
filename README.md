@@ -21,13 +21,15 @@ its own managers, groups and notes:
 ```json
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>ioanalytica/renovate-config"],
+  "extends": ["github>ioanalytica/renovate-config#v1.0.2"],
   "packageRules": []
 }
 ```
 
-`github>ioanalytica/renovate-config` reads `default.json` from the default
-branch; `github>ioanalytica/renovate-config#v1.0.0` reads it from a tag.
+`github>ioanalytica/renovate-config#v1.0.2` reads `default.json` from that tag,
+and Renovate proposes the next tag as an update. Without a tag,
+`github>ioanalytica/renovate-config` reads it from the default branch: every
+change applies at once, with no pull request.
 
 What it sets:
 
@@ -46,6 +48,7 @@ What it sets:
 | `osvVulnerabilityAlerts` | `true` | Fixes for vulnerabilities in the OSV database. |
 | `vulnerabilityAlerts` | any time, no minimum age, label `security` | A security fix comes at once, not on the next Monday after three days. |
 | label `decision` | majors; a new digest under an unchanged action tag | The updates that used to wait for approval on the dashboard now come as pull requests that say they need a decision. |
+| group `renovate-config` | the preset tag and the pin-checksums workflow commit | A new release of this repository comes as one pull request that moves both pins (with the preset pinned to a tag, as above). |
 
 The Dependency Dashboard stays as an inventory, but nothing waits on it.
 
