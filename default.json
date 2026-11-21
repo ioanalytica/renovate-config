@@ -27,7 +27,7 @@
       "minimumReleaseAge": null
     },
     {
-      "description": "A new major is a decision, not routine: its pull request comes at once like any other and carries the label decision. Closing it declines every release of that major; the next major comes again.",
+      "description": "A new major is a decision, not routine: its pull request comes at once like any other and carries the label decision. Closing it declines every release of that major (the next major comes again), unless the pull request is an immortal group, which Renovate opens again.",
       "matchUpdateTypes": ["major"],
       "addLabels": ["decision"]
     },
