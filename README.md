@@ -73,7 +73,16 @@ The Dependency Dashboard stays as an inventory, but nothing waits on it.
   pull request with the label `decision` (the preset adds it to majors and
   moved action tags; a repository adds it to its own deliberate moves with
   `"addLabels": ["decision"]` in place of `"dependencyDashboardApproval": true`).
-  Closing the pull request declines that version; Renovate proposes the next one.
+  What closing the pull request declines depends on the update (Renovate
+  says so in a comment on the closed pull request):
+  - a minor or patch update: only that version; the next release comes as a
+    new pull request;
+  - a major: every release of that major (the next major comes as a new pull
+    request; moving to the declined major by hand brings its updates back);
+  - a digest, such as a moved action tag: only that digest;
+  - a group with updates to different versions: nothing; Renovate opens it
+    again on its next run. To hold back one of them, exclude it in the
+    repository's config instead.
   The preset cannot remove a repository's own `dependencyDashboardApproval`
   rules: each repository drops them when it switches to the preset.
 - **No limits.** The repositories had `prConcurrentLimit` 5 or 10, and Renovate's
