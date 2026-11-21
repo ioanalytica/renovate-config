@@ -48,7 +48,20 @@ What it sets:
 | `osvVulnerabilityAlerts` | `true` | Fixes for vulnerabilities in the OSV database. |
 | `vulnerabilityAlerts` | any time, no minimum age, label `security` | A security fix comes at once, not on the next Monday after three days. |
 | label `decision` | majors; a new digest under an unchanged action tag | The updates that used to wait for approval on the dashboard now come as pull requests that say they need a decision. |
-| group `renovate-config` | the preset tag and the pin-checksums workflow commit | A new release of this repository comes as one pull request that moves both pins (with the preset pinned to a tag, as above). |
+| group `renovate-config` | the preset tag and the pin-checksums workflow commit | A new release of this repository comes as one pull request that moves both pins (with the preset pinned to a tag, as above; see below for repositories with their own GitHub Actions group). |
+
+Renovate applies a repository's `packageRules` after the preset's, and the last
+matching rule sets the group. A repository with its own group for GitHub Actions
+updates therefore takes the workflow pin into that group, and the update splits
+into two pull requests again. Such a repository repeats the rule after its own
+group:
+
+```json
+{
+  "matchDepNames": ["ioanalytica/renovate-config"],
+  "groupName": "renovate-config"
+}
+```
 
 The Dependency Dashboard stays as an inventory, but nothing waits on it.
 
