@@ -46,6 +46,7 @@ What it sets:
 | `osvVulnerabilityAlerts` | `true` | Fixes for vulnerabilities in the OSV database. |
 | `vulnerabilityAlerts` | any time, no minimum age, label `security` | A security fix comes at once, not on the next Monday after three days. |
 | label `decision` | majors; a new digest under an unchanged action tag | The updates that used to wait for approval on the dashboard now come as pull requests that say they need a decision. |
+| group `renovate-config` | the preset tag and the pin-checksums workflow commit | A new release of this repository comes as one pull request that moves both pins. |
 
 The Dependency Dashboard stays as an inventory, but nothing waits on it.
 

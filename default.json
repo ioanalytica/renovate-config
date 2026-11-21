@@ -37,6 +37,11 @@
       "matchUpdateTypes": ["digest"],
       "addLabels": ["decision"],
       "prBodyNotes": ["The tag of this action now points to another commit. Look at that commit before merging; close the pull request to keep the old one."]
+    },
+    {
+      "description": "A repository pins this preset by tag and its pin-checksums workflow by commit: both move to a new release of ioanalytica/renovate-config in one pull request.",
+      "matchDepNames": ["ioanalytica/renovate-config"],
+      "groupName": "renovate-config"
     }
   ]
 }
