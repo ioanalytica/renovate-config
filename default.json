@@ -3,7 +3,7 @@
   "description": "Shared Renovate preset of the ioanalytica repositories: one pull request per update, each with a review request, no update that waits on the Dependency Dashboard, security fixes at any time. A repository extends it with github>ioanalytica/renovate-config and keeps its own managers, groups and notes.",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigestsToSemver"],
   "timezone": "Europe/Berlin",
-  "schedule": ["* 0-5 * * 1"],
+  "schedule": ["* 0-5 * * *"],
   "minimumReleaseAge": "3 days",
   "rebaseWhen": "conflicted",
   "gitIgnoredAuthors": ["359300723+ioanalytica-renovate-helper[bot]@users.noreply.github.com"],
@@ -15,7 +15,7 @@
   "reviewers": ["ioanalytica"],
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
-    "description": "A fix for a known vulnerability comes at once: outside the weekly schedule and without the three days' wait.",
+    "description": "A fix for a known vulnerability comes at once: outside the nightly schedule and without the three days' wait.",
     "schedule": ["at any time"],
     "minimumReleaseAge": null,
     "labels": ["security"]
@@ -24,6 +24,12 @@
     {
       "description": "A digest has no release date to age against: with minimumReleaseAge, its pull request would stay pending for good (minimumReleaseAgeBehaviour timestamp-required).",
       "matchUpdateTypes": ["digest", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "What a repository publishes does not wait: an update of something its images or charts contain (a pin under docker/ or chart/, in a Dockerfile, Chart.yaml or values.yaml at the top) comes in the night after its release. Most security fixes of such components are in no database that would make them a vulnerability alert. Packages from npm and PyPI keep the three days: there a release that is pulled again in its first days is the more likely trouble, and their known vulnerabilities come as alerts at once.",
+      "matchFileNames": ["docker/**", "chart/**", "Dockerfile", "Chart.yaml", "values.yaml"],
+      "matchDatasources": ["!npm", "!pypi"],
       "minimumReleaseAge": null
     },
     {

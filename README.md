@@ -3,8 +3,9 @@
 The shared Renovate setup of the ioanalytica repositories:
 
 - **`default.json`**, a Renovate preset: one pull request per update, each with a
-  review request, no update that waits on the Dependency Dashboard, and security
-  fixes at any time.
+  review request, no update that waits on the Dependency Dashboard, updates
+  every night, no wait for what a repository publishes, and security fixes at
+  any time.
 - **`.github/workflows/pin-checksums.yml`**, a reusable workflow: on a Renovate
   pull request it fills the hash pins that go with a version pin, from the sums
   the release publishes and after checking their PGP signature, and adds a
@@ -36,8 +37,8 @@ What it sets:
 | Setting | Value | Why |
 |---|---|---|
 | `extends` | `config:recommended`, `helpers:pinGitHubActionDigestsToSemver` | Actions pinned by commit, with the version as a comment. |
-| `schedule`, `timezone` | Mondays 0–5 h, Europe/Berlin | One batch a week. |
-| `minimumReleaseAge` | 3 days, none for digests | A release that is pulled again in its first days never reaches a pull request. A digest has no release date, and with the default `minimumReleaseAgeBehaviour` its status `renovate/stability-days` would stay pending for good. |
+| `schedule`, `timezone` | every night 0–5 h, Europe/Berlin | An update comes in the night after it is due, not on the next Monday. A repository keeps its slower schedules (monthly groups) in its own rules. |
+| `minimumReleaseAge` | 3 days; none for digests and for what a repository publishes | A release that is pulled again in its first days never reaches a pull request. What the images and charts contain does not wait (see [No wait for what a repository publishes](#no-wait-for-what-a-repository-publishes)). A digest has no release date, and with the default `minimumReleaseAgeBehaviour` its status `renovate/stability-days` would stay pending for good. |
 | `rebaseWhen` | `conflicted` | No rebase and no new CI run for every commit on the base branch. |
 | `gitIgnoredAuthors` | the commit address of the GitHub App `ioanalytica-renovate-helper` | Renovate keeps rebasing and updating a branch that carries the app's commit of the sums (see [The GitHub App](#the-github-app)). A repository that sets its own `gitIgnoredAuthors` replaces this list and must repeat the address. |
 | `semanticCommits` | `enabled` | A repository without them sets `"disabled"`. |
@@ -46,7 +47,7 @@ What it sets:
 | `prConcurrentLimit`, `prHourlyLimit` | `0` (no limit) | No update waits as "rate-limited" on the dashboard. Groups and schedules keep the number of pull requests small. |
 | `reviewers` | `ioanalytica` | Every pull request requests a review, which notifies on its own. |
 | `osvVulnerabilityAlerts` | `true` | Fixes for vulnerabilities in the OSV database. |
-| `vulnerabilityAlerts` | any time, no minimum age, label `security` | A security fix comes at once, not on the next Monday after three days. |
+| `vulnerabilityAlerts` | any time, no minimum age, label `security` | A security fix that GitHub's advisories or OSV know comes at once, at any hour and without the three days. |
 | label `decision` | majors; a new digest under an unchanged action tag | The updates that used to wait for approval on the dashboard now come as pull requests that say they need a decision. |
 | group `renovate-config` | the preset tag and the pin-checksums workflow commit | A new release of this repository comes as one pull request that moves both pins (with the preset pinned to a tag, as above; see below for repositories with their own GitHub Actions group). |
 
@@ -64,6 +65,35 @@ group:
 ```
 
 The Dependency Dashboard stays as an inventory, but nothing waits on it.
+
+### No wait for what a repository publishes
+
+`vulnerabilityAlerts` covers only what a vulnerability database lists for a
+package manager: npm, PyPI, Composer and the like. A fix in NGINX, in a base
+image, in etcd or rclone, or in an image a chart pins is in none of them, and
+it used to wait three days and then for the next Monday. One rule therefore
+drops the minimum age by where a pin stands:
+
+```json
+{
+  "matchFileNames": ["docker/**", "chart/**", "Dockerfile", "Chart.yaml", "values.yaml"],
+  "matchDatasources": ["!npm", "!pypi"],
+  "minimumReleaseAge": null
+}
+```
+
+These are the files the repositories build their images and charts from
+(`Dockerfile`, `Chart.yaml` and `values.yaml` match at the top of a repository
+only). With the nightly schedule, such an update is a pull request in the
+night after its release. Packages from npm and PyPI keep the three days even
+there: a release that is pulled again in its first days is the more likely
+trouble with them, and their known vulnerabilities come as alerts at once.
+Workflows, actions, tests and documentation keep the three days as well.
+
+A repository whose published files are elsewhere adds its own rule with
+`"minimumReleaseAge": null`; one that wants the wait back for a dependency
+sets `"minimumReleaseAge": "3 days"` in a rule of its own, which comes after
+the preset's.
 
 ### What changed against the per-repository configs
 
@@ -99,7 +129,7 @@ The Dependency Dashboard stays as an inventory, but nothing waits on it.
 - **The CHANGELOG line** of an image or tool update is written by the workflow
   when the table entry names a changelog.
 - **The same baseline everywhere.** A repository that had only
-  `config:recommended` gets the weekly schedule, the minimum age, the DCO
+  `config:recommended` gets the nightly schedule, the minimum age, the DCO
   sign-off and the review requests.
 
 Repositories keep in their own config: their managers and custom managers,
