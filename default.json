@@ -38,8 +38,9 @@
       "addLabels": ["decision"]
     },
     {
-      "description": "A new digest under the same version means a release tag was moved: look at the commit before merging.",
+      "description": "A new digest under the same version of an action means its release tag was moved: look at the commit before merging. An image of a workflow's services or container is not meant: its new digest under the same tag is a rebuild.",
       "matchManagers": ["github-actions"],
+      "matchDatasources": ["!docker"],
       "matchUpdateTypes": ["digest"],
       "addLabels": ["decision"],
       "prBodyNotes": ["The tag of this action now points to another commit. Look at that commit before merging; close the pull request to keep the old one."]
