@@ -742,3 +742,17 @@ nopins_error() {
   nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n  pins: []\n  changelog: { file: CHANGELOG.md, line: "* extra {v}" }\n'
   [[ "$(cat "$ERR")" == "extra: no pins" ]] || false
 }
+
+@test "a changelog of null or false is refused, with and without pins" {
+  nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n  changelog:\n'
+  [[ "$(cat "$ERR")" == "extra: changelog must have a file and a line, nothing else" ]] || false
+  # Back to the table without the first entry.
+  git reset -q --hard base~1
+  nopins_error '- name: other\n  version: docker/Dockerfile#S3FS_VERSION\n  changelog: false\n'
+  [[ "$(cat "$ERR")" == "other: changelog must have a file and a line, nothing else" ]] || false
+}
+
+@test "a changelog of null stops an entry with pins as well" {
+  table_error "edit_table '/oras {v}/d' && edit_table '/etcd {v}/d' && edit_table '/NGINX {v}/d' && edit_table '/^    file: CHANGELOG.md/d' && edit_table 's/^  changelog:/  changelog: null/'"
+  [[ "$(cat "$ERR")" == "oras: changelog must have a file and a line, nothing else" ]] || false
+}

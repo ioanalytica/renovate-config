@@ -462,7 +462,9 @@ for ((i = 0; i < count; i++)); do
     printf '%s\t%s\t%s\t%s\n' "$pfile" "$pvar" "$value" "$name" >>"$tmp/plan"
   done
 
-  cl=$(jq -c '.changelog // empty' <<<"$e")
+  # Not ".changelog // empty": a changelog of null or false is a mistake in
+  # the table, not an entry without one.
+  cl=$(jq -c 'if has("changelog") then .changelog else empty end' <<<"$e")
   if [ -n "$cl" ]; then
     jq -e 'type == "object" and (keys - ["file","line"] | length == 0) and (.file|type) == "string" and (.line|type) == "string"' <<<"$cl" >/dev/null \
       || fail "$what: changelog must have a file and a line, nothing else"
