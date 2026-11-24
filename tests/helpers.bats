@@ -130,7 +130,7 @@ SH
   run yq -o=json '.' "$ROOT/examples/checksums.yaml"
   [ "$status" -eq 0 ]
   jq -e 'all(.[]; (keys - ["name","version","sums","signature","key","key_url","algorithm","pins","changelog"]) == []
-         and all(.pins[]; (keys - ["file","var","asset","url"]) == []))' <<<"$output"
+         and all(.pins // [] | .[]; (keys - ["file","var","asset","url"]) == []))' <<<"$output"
 }
 
 @test "api-commit: from a subdirectory, paths are those of the work tree's top" {
