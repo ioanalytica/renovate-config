@@ -1,4 +1,5 @@
-# .github/checksums.yaml: the hash pins that go with a version pin.
+# .github/checksums.yaml: the hash pins that go with a version pin, and the
+# CHANGELOG lines of version pins with and without them.
 # One entry per tool; README.md describes every key.
 
 # Sums with a detached PGP signature; the key comes from the project's KEYS
@@ -57,3 +58,11 @@
     - file: docker/Dockerfile
       var: S3FS_SHA512
       url: https://github.com/s3fs-fuse/s3fs-fuse/archive/v{v}.tar.gz
+
+# No hash pin at all: only the CHANGELOG line of a version that ships in the
+# image. Nothing is downloaded or verified.
+- name: nginx
+  version: docker/Dockerfile#NGINX_VERSION
+  changelog:
+    file: CHANGELOG.md
+    line: "* **NGINX {v} in the image** (was {old})."

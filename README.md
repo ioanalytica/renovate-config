@@ -9,7 +9,7 @@ The shared Renovate setup of the ioanalytica repositories:
 - **`.github/workflows/pin-checksums.yml`**, a reusable workflow: on a Renovate
   pull request it fills the hash pins that go with a version pin, from the sums
   the release publishes and after checking their PGP signature, and adds a
-  CHANGELOG line. It commits through a GitHub App, so the pull request is green
+  CHANGELOG line, also for a version pin that has no hash pin. It commits through a GitHub App, so the pull request is green
   and reviewable without a hand-made commit.
 
 There is no automerge: every update stays a pull request that a person merges.
@@ -127,7 +127,7 @@ the preset's.
   `prBodyNotes` that said which sum to copy from where move into the table
   `.github/checksums.yaml`.
 - **The CHANGELOG line** of an image or tool update is written by the workflow
-  when the table entry names a changelog.
+  when the table entry names a changelog, with or without hash pins.
 - **The same baseline everywhere.** A repository that had only
   `config:recommended` gets the nightly schedule, the minimum age, the DCO
   sign-off and the review requests.
@@ -204,11 +204,30 @@ fail while a pin is wrong.
 | `key` | with `signature` | The full fingerprint (40 or 64 hex digits, spaces allowed) of the key that must have made the signature, primary key or subkey. |
 | `key_url` | optional | Where to get the key, e.g. the project's KEYS file. Default: `https://keys.openpgp.org/vks/v1/by-fingerprint/<key>`. |
 | `algorithm` | optional | `sha256` (default) or `sha512`. |
-| `pins` | required | The variables to fill: `file`, `var`, and either `asset` (its sum in `sums`) or `url` (the sum of that download itself, for releases without published sums). |
-| `changelog` | optional | `file` and `line`: the line to add under `## Unreleased`. |
+| `pins` | required, unless the entry only adds a changelog line | The variables to fill: `file`, `var`, and either `asset` (its sum in `sums`) or `url` (the sum of that download itself, for releases without published sums). |
+| `changelog` | optional; required without `pins` | `file` and `line`: the line to add under `## Unreleased`. |
 
 Placeholders: `{v}` the new version, `{old}` the version on the base branch,
 `{name}` the entry's name, and in `signature` `{sums}` the sums URL.
+
+An update that ships in an image or a chart but has no hash pin, such as a
+version in a Dockerfile `ARG` or a chart's `appVersion`, gets its changelog
+line from an entry of `name`, `version` and `changelog` alone:
+
+```yaml
+- name: nginx
+  version: docker/Dockerfile#NGINX_VERSION
+  changelog:
+    file: CHANGELOG.md
+    line: "* **NGINX {v} in the image** (was {old})."
+```
+
+Such an entry downloads and verifies nothing, so it takes none of `sums`,
+`signature`, `key`, `key_url` and `algorithm`. A version that is pinned in two
+files (the Dockerfile and `appVersion`) needs one entry, on either of them:
+two entries would add two lines. The line should name the entry (in any case)
+and `{v}`: that is how a later run recognises it and does not add it again
+after it was edited in review.
 
 A variable is one assignment on one line: `VAR: value` (YAML), `VAR=value` (env
 file), `ARG VAR=value` or `export VAR=value`, the value optionally quoted. Each
@@ -227,7 +246,8 @@ On every push to a `renovate/*` branch of a pull request opened by
    sums (https only), verifies the signature where one is configured, against
    only the configured key in an empty keyring, and takes the sum of each pin's
    asset. A clear-signed file must be a single signed message with nothing
-   around it, and only the signed text is read.
+   around it, and only the signed text is read. An entry without `pins` has
+   nothing to download: it only gets its changelog line in the next step.
 3. Only when every check of every entry passes does it write: the new sums, and
    the changelog line as the first item under `## Unreleased` (a new section
    above the first `## ` heading when there is none). An entry gets no line

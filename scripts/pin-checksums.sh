@@ -7,7 +7,8 @@
 # which asset's sum; README.md describes the format. For every entry whose
 # version differs from the one at --base, the script downloads the sums,
 # verifies them, and writes the new values. With a changelog in the entry it
-# adds a line under "## Unreleased".
+# adds a line under "## Unreleased". An entry without pins has nothing to
+# download or verify: it only adds its changelog line.
 #
 # Every check runs before the first write: a failed check leaves the work tree
 # as it was, exits 1 and names the reason in --error. A run whose values are
@@ -32,7 +33,8 @@ Usage: pin-checksums.sh [options]
                      that do not differ from REV.
   --all              Process every entry and add no changelog lines.
   --summary FILE     Write one line "<name> <old> <new>" per entry whose pins
-                     or changelog changed.
+                     or changelog changed, with " changelog" at its end for
+                     an entry without pins.
   --error FILE       Write the reason of a failed check to FILE.
   --dry-run          Download and check everything, write nothing.
   -h, --help         Show this help.
@@ -377,6 +379,16 @@ for ((i = 0; i < count; i++)); do
     [ -z "$old" ] || check_version "$what (at $base)" "$old"
   fi
 
+  # An entry without pins only adds its changelog line. It verifies nothing,
+  # so it must not name sums, a signature or a key that would look as if it
+  # did.
+  has_pins=$(jq 'has("pins")' <<<"$e")
+  if [ "$has_pins" = false ]; then
+    extra=$(jq -r 'keys - ["name","version","changelog"] | join(", ")' <<<"$e")
+    [ -z "$extra" ] || fail "$what: an entry without pins verifies nothing, but it has: $extra"
+    jq -e 'has("changelog")' <<<"$e" >/dev/null || fail "$what: an entry needs pins or a changelog"
+  fi
+
   algorithm=$(jq -r '.algorithm // "sha256" | strings' <<<"$e")
   case "$algorithm" in
     sha256) len=64 ;;
@@ -406,9 +418,10 @@ for ((i = 0; i < count; i++)); do
   pins=$(jq -c '.pins // [] | if type == "array" and all(.[]; type == "object") then . else error("pins") end' <<<"$e" 2>/dev/null) \
     || fail "$what: pins must be a list of objects"
   npins=$(jq length <<<"$pins")
-  [ "$npins" -gt 0 ] || fail "$what: no pins"
+  if [ "$has_pins" = true ] && [ "$npins" -eq 0 ]; then fail "$what: no pins"; fi
 
   log "$what ${old:-(new)} -> $new"
+  if [ "$has_pins" = false ]; then log "  no pins: only the changelog line"; fi
   [ -z "$sums_url" ] || get_sums "$what" "$sums_url" "$sig" "$key" "$key_url"
   if [ -n "$sig" ]; then log "  signature of $sums_url verified, made by $key"; fi
 
@@ -449,7 +462,9 @@ for ((i = 0; i < count; i++)); do
     printf '%s\t%s\t%s\t%s\n' "$pfile" "$pvar" "$value" "$name" >>"$tmp/plan"
   done
 
-  cl=$(jq -c '.changelog // empty' <<<"$e")
+  # Not ".changelog // empty": a changelog of null or false is a mistake in
+  # the table, not an entry without one.
+  cl=$(jq -c 'if has("changelog") then .changelog else empty end' <<<"$e")
   if [ -n "$cl" ]; then
     jq -e 'type == "object" and (keys - ["file","line"] | length == 0) and (.file|type) == "string" and (.line|type) == "string"' <<<"$cl" >/dev/null \
       || fail "$what: changelog must have a file and a line, nothing else"
@@ -467,7 +482,9 @@ for ((i = 0; i < count; i++)); do
       printf '%s\t%s\t%s\t%s\n' "$cfile" "$cline" "$name" "$new" >>"$tmp/changelog-plan"
     fi
   fi
-  printf '%s %s %s\n' "$name" "${old:--}" "$new" >>"$tmp/entries"
+  kind=pins
+  if [ "$has_pins" = false ]; then kind=changelog; fi
+  printf '%s %s %s %s\n' "$name" "${old:--}" "$new" "$kind" >>"$tmp/entries"
 done
 
 # Two pins of the same variable must agree.
@@ -573,8 +590,9 @@ while IFS=$'\t' read -r cfile cline entry version; do
 done < <(awk '{ l[NR] = $0 } END { for (i = NR; i > 0; i--) print l[i] }' "$tmp/changelog-plan")
 
 if [ -n "$summary_file" ]; then
-  while read -r name old new; do
-    if grep -qxF "$name" "$tmp/changed-entries"; then printf '%s %s %s\n' "$name" "$old" "$new"; fi
+  while read -r name old new kind; do
+    grep -qxF "$name" "$tmp/changed-entries" || continue
+    if [ "$kind" = changelog ]; then printf '%s %s %s changelog\n' "$name" "$old" "$new"; else printf '%s %s %s\n' "$name" "$old" "$new"; fi
   done <"$tmp/entries" >"$summary_file"
 fi
 

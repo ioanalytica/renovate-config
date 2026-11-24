@@ -66,6 +66,8 @@ ARG RCLONE_VERSION=1.75.0
 ARG RCLONE_SHA256_AMD64=$OLD64
 ARG RCLONE_SHA256_ARM64=$OLD64
 RUN env -u RCLONE_SHA256_AMD64 true
+# renovate: datasource=github-tags depName=nginx/nginx
+ARG NGINX_VERSION=1.30.7
 EOF
   cat >docker/rclone.env <<EOF
 # renovate: datasource=github-releases depName=rclone/rclone
@@ -138,6 +140,11 @@ write_table() {
     - file: docker/Dockerfile
       var: S3FS_SHA512
       url: https://github.com/s3fs-fuse/s3fs-fuse/archive/v{v}.tar.gz
+- name: nginx
+  version: docker/Dockerfile#NGINX_VERSION
+  changelog:
+    file: CHANGELOG.md
+    line: "* **NGINX {v} in the image** (was {old})."
 EOF
 }
 
@@ -629,4 +636,123 @@ edit_table() { sed -i.bak "$1" .github/checksums.yaml && rm .github/checksums.ya
 @test "an asset of signed sums without {v} is refused" {
   table_error "edit_table 's#      asset: oras_{v}_linux_amd64.tar.gz#      asset: oras_linux_amd64.tar.gz#'"
   [[ "$(cat "$ERR")" == "oras: pin ORAS_SHA256: the asset of signed sums must contain {v}" ]] || false
+}
+
+# --- Entries without pins: only the changelog line -----------------------------
+
+@test "nginx: an entry without pins gets its changelog line, nothing downloaded" {
+  rm -rf "$MIRROR"
+  bump docker/Dockerfile NGINX_VERSION 1.30.8
+  pin
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nginx 1.30.7 -> 1.30.8"*"no pins: only the changelog line"* ]] || false
+  [ "$(cat "$SUM")" = "nginx 1.30.7 1.30.8 changelog" ]
+  diff -u - CHANGELOG.md <<'EOF'
+# Changelog
+
+## Unreleased
+
+* **NGINX 1.30.8 in the image** (was 1.30.7).
+* **Something else.**
+
+## 1.0.0
+
+* First release.
+EOF
+  [ "$(git status --porcelain)" = " M CHANGELOG.md" ]
+}
+
+@test "an entry without pins: a second run adds no second line" {
+  bump docker/Dockerfile NGINX_VERSION 1.30.8
+  pin
+  [ "$status" -eq 0 ]
+  git commit -qam "line added"
+  pin
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CHANGELOG.md already mentions nginx 1.30.8 in this pull request"* ]] || false
+  [[ "$output" == *"All values already in place: nothing written."* ]] || false
+  [ -z "$(git status --porcelain)" ]
+  [ ! -s "$SUM" ]
+  [ "$(grep -c 'NGINX 1.30.8' CHANGELOG.md)" -eq 1 ]
+}
+
+@test "an entry without pins: a line edited in review is not added again" {
+  bump docker/Dockerfile NGINX_VERSION 1.30.8
+  pin
+  [ "$status" -eq 0 ]
+  sed -i.bak 's/in the image\*\* (was 1.30.7)/in the image**, with the fix for CVE-0000-0002/' CHANGELOG.md && rm CHANGELOG.md.bak
+  git commit -qam "line edited"
+  pin
+  [ "$status" -eq 0 ]
+  [ -z "$(git status --porcelain)" ]
+  [ "$(grep -c 'NGINX 1.30.8' CHANGELOG.md)" -eq 1 ]
+}
+
+@test "an entry without pins writes nothing when another entry fails" {
+  bump docker/Dockerfile NGINX_VERSION 1.30.8
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  f="$MIRROR/github.com/etcd-io/etcd/releases/download/v3.6.17/SHA256SUMS"
+  grep -v 'linux-arm64' "$f" >"$f.new" && mv "$f.new" "$f"
+  pin
+  [ "$status" -eq 1 ]
+  [[ "$(cat "$ERR")" == "etcd: no sum for etcd-v3.6.17-linux-arm64.tar.gz in the sums" ]] || false
+  [ -z "$(git status --porcelain)" ]
+  [ ! -s "$SUM" ]
+}
+
+@test "entries with and without pins in one run, lines in the table's order" {
+  bump docker/Dockerfile NGINX_VERSION 1.30.8
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  pin
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SUM")" = "$(printf 'etcd 3.6.16 3.6.17\nnginx 1.30.7 1.30.8 changelog')" ]
+  [ "$(sed -n 5,7p CHANGELOG.md)" = "$(printf '* **etcd 3.6.17 in the agent image.**\n* **NGINX 1.30.8 in the image** (was 1.30.7).\n* **Something else.**')" ]
+  [ "$(value_of docker/Dockerfile ETCD_SHA256_AMD64)" != "$OLD64" ]
+}
+
+@test "an entry without pins and with an unchanged version adds nothing" {
+  bump docker/Dockerfile ETCD_VERSION 3.6.17
+  pin
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nginx 1.30.7: unchanged since base, skipped."* ]] || false
+  ! grep -q NGINX CHANGELOG.md
+}
+
+# The table at base gets one more entry, and the version it names moves.
+nopins_error() {
+  printf -- "$1" >>.github/checksums.yaml
+  git commit -qam "table" && git tag -f base >/dev/null
+  bump docker/Dockerfile S3FS_VERSION 1.98
+  pin
+  [ "$status" -eq 1 ]
+  [ -z "$(git status --porcelain)" ]
+}
+
+@test "an entry without pins and without a changelog is refused" {
+  nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n'
+  [[ "$(cat "$ERR")" == "extra: an entry needs pins or a changelog" ]] || false
+}
+
+@test "an entry without pins that names sums or a key is refused" {
+  nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n  sums: https://example.com/v{v}/SHA256SUMS\n  signature: inline\n  changelog: { file: CHANGELOG.md, line: "* extra {v}" }\n'
+  [[ "$(cat "$ERR")" == "extra: an entry without pins verifies nothing, but it has: signature, sums" ]] || false
+}
+
+@test "an empty list of pins is still refused" {
+  nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n  pins: []\n  changelog: { file: CHANGELOG.md, line: "* extra {v}" }\n'
+  [[ "$(cat "$ERR")" == "extra: no pins" ]] || false
+}
+
+@test "a changelog of null or false is refused, with and without pins" {
+  nopins_error '- name: extra\n  version: docker/Dockerfile#S3FS_VERSION\n  changelog:\n'
+  [[ "$(cat "$ERR")" == "extra: changelog must have a file and a line, nothing else" ]] || false
+  # Back to the table without the first entry.
+  git reset -q --hard base~1
+  nopins_error '- name: other\n  version: docker/Dockerfile#S3FS_VERSION\n  changelog: false\n'
+  [[ "$(cat "$ERR")" == "other: changelog must have a file and a line, nothing else" ]] || false
+}
+
+@test "a changelog of null stops an entry with pins as well" {
+  table_error "edit_table '/oras {v}/d' && edit_table '/etcd {v}/d' && edit_table '/NGINX {v}/d' && edit_table '/^    file: CHANGELOG.md/d' && edit_table 's/^  changelog:/  changelog: null/'"
+  [[ "$(cat "$ERR")" == "oras: changelog must have a file and a line, nothing else" ]] || false
 }
